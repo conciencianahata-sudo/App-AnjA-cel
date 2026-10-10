@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AnjA Base de Datos</title>
+<meta name="description" content="Registro de usuarios de AjnA con el mismo Excel que el programa de la PC.">
+<meta name="theme-color" content="#FBF3EC">
+<meta name="color-scheme" content="light">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AnjA">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+  :root{
+    --purple:#7A2359; --purple-dark:#5C1A43; --orange:#F0862E; --coral:#DE6B45;
+    --ink:#2E2A28; --ink-soft:#5A5250; --paper:#FFFDFB; --cream:#FBF3EC; --line:#E7DDD3;
+    --danger:#A12B2B; --ok:#2F7A46;
+    --alto-barra:56px; --alto-acciones:72px;
+  }
+  *{ box-sizing:border-box; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0; background:var(--cream); color:var(--ink);
+    font:16px/1.5 "Segoe UI", Calibri, system-ui, -apple-system, Roboto, sans-serif;
+    min-height:100vh; min-height:100dvh;
+  }
+  h1,h2,h3{ font-family:Georgia,"Times New Roman",serif; margin:0; }
+  button,input,textarea{ font:inherit; color:inherit; }
+  button{ cursor:pointer; }
+  [hidden]{ display:none !important; }
+  :focus-visible{ outline:3px solid var(--purple); outline-offset:2px; border-radius:6px; }
+
+  /* ---------- barra superior ---------- */
+  .barra{
+    position:sticky; top:0; z-index:20; height:calc(var(--alto-barra) + env(safe-area-inset-top));
+    padding:env(safe-area-inset-top) 8px 0 12px; display:flex; align-items:center; gap:10px;
+    background:var(--paper); border-bottom:1px solid var(--line);
+  }
+  .barra img{ width:34px; height:34px; object-fit:contain; }
+  .barra .titulos{ flex:1; min-width:0; line-height:1.15; }
+  .barra .marca{ font:700 21px Georgia,serif; color:var(--orange); }
+  .barra .archivo{ font-size:12.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .icono{
+    width:44px; height:44px; display:grid; place-items:center; background:none; border:0; border-radius:50%;
+    color:var(--purple-dark); font-size:24px; line-height:1;
+  }
+  .icono:active{ background:var(--cream); }
+
+  /* ---------- contenedor ---------- */
+  main{ max-width:720px; margin:0 auto; padding:14px 16px calc(var(--alto-acciones) + 28px + env(safe-area-inset-bottom)); }
+  .centrado{ min-height:60vh; display:flex; flex-direction:column; justify-content:center; gap:14px; }
+  .centrado h2{ font-size:26px; line-height:1.2; color:var(--purple-dark); }
+  .suave{ color:var(--ink-soft); font-size:15px; margin:0; }
+  .tarjeta{ background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:0 2px 14px rgba(90,60,40,.06); }
+
+  /* ---------- botones ---------- */
+  .btn{
+    min-height:48px; padding:0 20px; border-radius:12px; border:1.5px solid var(--purple); background:var(--paper);
+    color:var(--purple-dark); font-weight:700; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn.primario{ background:var(--purple); color:#fff; border-color:var(--purple); }
+  .btn.primario:active{ background:var(--purple-dark); }
+  .btn.peligro{ border-color:var(--danger); color:var(--danger); }
+  .btn[disabled]{ opacity:.55; cursor:default; }
+  .btn.lleno{ width:100%; }
+  .enlace{ background:none; border:0; padding:6px 2px; color:var(--purple); font-weight:600; text-decoration:underline; min-height:44px; }
+
+  /* ---------- lista de usuarios ---------- */
+  .buscador{ position:sticky; top:calc(var(--alto-barra) + env(safe-area-inset-top)); z-index:10; background:var(--cream); padding:4px 0 10px; display:flex; gap:8px; }
+  .buscador input{ flex:1; }
+  input[type=text],input[type=search],input[type=date],textarea{
+    width:100%; min-height:48px; padding:10px 12px; border:1.5px solid var(--line); border-radius:10px; background:#fff;
+    font-size:16px; appearance:none; -webkit-appearance:none;
+  }
+  textarea{ resize:none; overflow:hidden; line-height:1.45; }
+  input[readonly]{ background:#F3EEE7; color:var(--ink-soft); }
+  input:focus,textarea:focus{ outline:none; border-color:var(--purple); box-shadow:0 0 0 3px rgba(122,35,89,.18); }
+  .usuarios{ list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+  .usuario{
+    width:100%; text-align:left; background:var(--paper); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; min-height:64px; display:block;
+  }
+  .usuario:active{ background:#fff; border-color:var(--purple); }
+  .usuario .nombre{ font:700 17px Georgia,serif; color:var(--purple-dark); }
+  .usuario .meta{ font-size:13.5px; color:var(--ink-soft); }
+  .conteo{ font-size:13.5px; color:var(--ink-soft); margin:2px 2px 8px; }
+
+  /* ---------- formulario ---------- */
+  .chips{
+    position:sticky; top:calc(var(--alto-barra) + env(safe-area-inset-top)); z-index:10; background:var(--cream);
+    display:flex; gap:8px; overflow-x:auto; padding:8px 16px; margin:0 -16px 6px; scrollbar-width:none;
+  }
+  .chips::-webkit-scrollbar{ display:none; }
+  .chip{
+    flex:0 0 auto; width:40px; height:40px; border-radius:50%; border:2px solid var(--paper);
+    font:700 15px Georgia,serif; box-shadow:0 0 0 1px var(--line);
+  }
+  .seccion{ margin-bottom:16px; scroll-margin-top:118px; }
+  .seccion > .cab{
+    display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px 14px 0 0; border:1px solid var(--line); border-bottom:0;
+    background:var(--paper); border-left-width:8px;
+  }
+  .seccion .insignia{ width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font:700 14px Georgia,serif; flex:0 0 auto; }
+  .seccion h2{ font-size:19px; line-height:1.2; }
+  .seccion .sub{ font-size:13.5px; color:var(--ink-soft); }
+  .seccion > .cuerpo{ background:var(--paper); border:1px solid var(--line); border-radius:0 0 14px 14px; padding:6px 14px 14px; border-left-width:8px; }
+  .campo{ margin-top:14px; }
+  .campo > label{ display:block; font-weight:600; font-size:15px; margin-bottom:5px; }
+  .campo .ayuda{ font-size:13px; color:var(--ink-soft); margin-top:3px; }
+  .fila{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:420px){ .fila{ grid-template-columns:1fr; } }
+  .escala{ display:grid; grid-template-columns:1fr auto; align-items:center; gap:4px 12px; }
+  .escala input[type=range]{ width:100%; height:44px; accent-color:var(--purple); }
+  .escala output{ font:700 22px Georgia,serif; min-width:2ch; text-align:right; color:var(--purple-dark); }
+  .escala .pie{ grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--ink-soft); }
+  .item{ border:1px solid var(--line); border-radius:12px; padding:4px 12px 12px; margin-top:12px; background:#fff; }
+  .item .cab-item{ display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
+  .item .cab-item b{ font:700 16px Georgia,serif; color:var(--purple-dark); }
+  .aviso-pegar{ display:flex; gap:12px; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .aviso-pegar p{ margin:0; font-size:15px; }
+
+  /* ---------- barra de acciones ---------- */
+  .acciones{
+    position:fixed; left:0; right:0; bottom:0; z-index:20; background:var(--paper); border-top:1px solid var(--line);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom)); display:flex; align-items:center; gap:12px;
+  }
+  .acciones .inner{ max-width:720px; margin:0 auto; width:100%; display:flex; align-items:center; gap:12px; }
+  .acciones .estado{ flex:1; font-size:13.5px; color:var(--ink-soft); min-width:0; }
+  .acciones .estado.sucio{ color:var(--danger); font-weight:600; }
+  .acciones .estado.limpio{ color:var(--ok); }
+  .acciones .btn{ flex:0 0 auto; min-width:140px; }
+
+  /* ---------- diálogos y avisos ---------- */
+  dialog{ border:0; border-radius:16px; padding:0; width:min(92vw,460px); background:var(--paper); color:var(--ink); box-shadow:0 12px 40px rgba(40,20,30,.3); }
+  dialog::backdrop{ background:rgba(46,42,40,.5); }
+  dialog .contenido{ padding:20px 18px 14px; display:grid; gap:12px; }
+  dialog h2{ font-size:21px; color:var(--purple-dark); line-height:1.25; }
+  dialog p{ margin:0; font-size:15.5px; white-space:pre-line; }
+  dialog .botones{ display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; padding:0 18px 18px; }
+  dialog.hoja{ margin:auto auto 0; border-radius:18px 18px 0 0; width:100%; max-width:560px; }
+  dialog.hoja .botones{ display:grid; gap:8px; padding:0 12px calc(14px + env(safe-area-inset-bottom)); }
+  dialog.hoja .btn{ justify-content:flex-start; border-color:var(--line); }
+  dialog textarea{ min-height:42vh; overflow:auto; resize:vertical; }
+  .giro{ width:34px; height:34px; border-radius:50%; border:4px solid var(--line); border-top-color:var(--purple); animation:gira .9s linear infinite; margin:0 auto; }
+  @keyframes gira{ to{ transform:rotate(360deg); } }
+  #toast{
+    position:fixed; left:50%; bottom:calc(var(--alto-acciones) + 18px + env(safe-area-inset-bottom)); transform:translate(-50%,12px);
+    max-width:min(92vw,520px); background:var(--ink); color:#fff; padding:12px 16px; border-radius:12px; font-size:15px;
+    opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:40; text-align:center;
+  }
+  #toast.visible{ opacity:1; transform:translate(-50%,0); }
+  #toast.error{ background:var(--danger); }
+  .error-caja{ border:1.5px solid var(--danger); background:#fff6f5; border-radius:12px; padding:14px; color:var(--ink); }
+  @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+</style>
+</head>
+<body>
+<header class="barra">
+  <button class="icono" id="btnAtras" aria-label="Volver a la lista" hidden>&#8249;</button>
+  <img src="icons/arbol.png" alt="" width="34" height="34" id="logo">
+  <div class="titulos">
+    <div class="marca" id="titulo">AjnA</div>
+    <div class="archivo" id="subtitulo">Base de datos de usuarios</div>
+  </div>
+  <button class="icono" id="btnMenu" aria-label="Más opciones" aria-haspopup="dialog" hidden>&#8942;</button>
+</header>
+
+<main id="vista" aria-live="polite"></main>
+
+<div class="acciones" id="acciones" hidden><div class="inner"></div></div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="vendor/exceljs.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="preguntas.js"></script>
+<script src="config.js"></script>
+<script src="core.js"></script>
+<script src="drive.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
