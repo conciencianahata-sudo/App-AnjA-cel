@@ -9,7 +9,7 @@
  * y al guardar se descarga una copia actualizada).
  */
 window.ANJA_CONFIG = {
-  CLIENT_ID: '',   // 625666223306-m8681apeptakktqsq6c0jv19v4e5504c.apps.googleusercontent.com
-  API_KEY: '',     // AIzaSyAMKdiWO3nSUj5lGq7XyjHghsWbwuy7cyA
-  APP_ID: '',      // 625666223306
+  CLIENT_ID: '625666223306-m8681apeptakktqsq6c0jv19v4e5504c.apps.googleusercontent.com',
+  API_KEY: 'AIzaSyAMKdiWO3nSUj5lGq7XyjHghsWbwuy7cyA',
+  APP_ID: '625666223306'
 };
