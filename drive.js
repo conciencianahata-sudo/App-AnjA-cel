@@ -20,6 +20,12 @@
   const guardarLS = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento: se pedirá de nuevo */ } };
   const leerLS = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const borrarLS = (k) => { try { localStorage.removeItem(k); } catch (e) { /* nada */ } };
+  // sessionStorage: dura solo mientras la pestaña está abierta (para la ida y vuelta a Google)
+  const guardarSS = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) { /* nada */ } };
+  const leerSS = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+  const borrarSS = (k) => { try { sessionStorage.removeItem(k); } catch (e) { /* nada */ } };
+  const CLAVE_ESTADO_AUTH = 'anja_auth_estado';
+  const CLAVE_MODO_AUTH = 'anja_auth_modo';
 
   function cargarScript(src, yaCargado) {
     return new Promise((ok, mal) => {
@@ -59,10 +65,13 @@
       this.cfg = cfg || {};
       this.token = null;
       this.venceEn = 0;
-      this.clienteToken = null;
+      this.errorRetorno = null;       // error devuelto por Google al volver (p. ej. interaction_required)
+      this.retornoSilencioso = false; // el intento que volvió fue el silencioso (prompt=none)
+      this.alRedirigir = null;        // la app lo usa para guardar lo escrito antes de salir hacia Google
       let guardado = null;
       try { guardado = JSON.parse(leerLS(CLAVE_ARCHIVO) || 'null'); } catch (e) { guardado = null; }
       this.archivo = guardado && guardado.id ? guardado : null;
+      this._leerRetorno();
     }
 
     get configurado() { return !!(this.cfg.CLIENT_ID && this.cfg.API_KEY && this.cfg.APP_ID); }
@@ -71,44 +80,55 @@
     get yaConectoAntes() { return leerLS(CLAVE_CONECTADO) === '1'; }
     get conectado() { return !!this.token && Date.now() < this.venceEn - 60000; }
 
-    /** Pide (o reutiliza) el permiso de Google. interactivo=false intenta hacerlo sin mostrar ventanas. */
-    async obtenerToken(interactivo) {
-      if (this.token && Date.now() < this.venceEn - 60000) return this.token;
-      await cargarScript('https://accounts.google.com/gsi/client', () => !!(raiz.google && raiz.google.accounts && raiz.google.accounts.oauth2));
-      return new Promise((ok0, mal0) => {
-        let terminado = false, reloj = null;
-        const ok = (v) => { if (!terminado) { terminado = true; clearTimeout(reloj); ok0(v); } };
-        const mal = (e) => { if (!terminado) { terminado = true; clearTimeout(reloj); mal0(e); } };
-        if (!interactivo) reloj = setTimeout(() => mal(new Error('Google no respondió.')), 8000);
-        if (!this.clienteToken) {
-          this.clienteToken = raiz.google.accounts.oauth2.initTokenClient({ client_id: this.cfg.CLIENT_ID, scope: SCOPE, callback: () => {} });
-        }
-        this.clienteToken.callback = (r) => {
-          if (r.error) { mal(new Error(r.error === 'access_denied' ? 'No diste permiso a la app en Google.' : (r.error_description || r.error))); return; }
-          this.token = r.access_token;
-          this.venceEn = Date.now() + (Number(r.expires_in) || 3600) * 1000;
-          guardarLS(CLAVE_CONECTADO, '1');
-          ok(this.token);
-        };
-        this.clienteToken.error_callback = (e) => mal(new Error(
-          e && e.type === 'popup_closed' ? 'Se cerró la ventana de Google antes de terminar.' :
-          e && e.type === 'popup_failed_to_open' ? 'El navegador bloqueó la ventana de Google. Permite las ventanas emergentes e inténtalo de nuevo.' :
-          (e && (e.message || e.type)) || 'No se pudo conectar con Google.'));
-        this.clienteToken.requestAccessToken({ prompt: interactivo ? '' : 'none' });
-      });
+    /** Si la página se abrió de vuelta desde Google, recoge el permiso que viene en la dirección (#access_token=…). */
+    _leerRetorno() {
+      const hash = location.hash || '';
+      if (!/(^#|&)(access_token|error)=/.test(hash)) return;
+      const p = new URLSearchParams(hash.replace(/^#/, ''));
+      const esperado = leerSS(CLAVE_ESTADO_AUTH);
+      const modo = leerSS(CLAVE_MODO_AUTH);
+      borrarSS(CLAVE_ESTADO_AUTH); borrarSS(CLAVE_MODO_AUTH);
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* nada */ }
+      if (!esperado || p.get('state') !== esperado) return;           // no es una respuesta que pidió esta pestaña
+      this.retornoSilencioso = modo === 'silencioso';
+      if (p.get('error')) { this.errorRetorno = p.get('error'); return; }
+      this.token = p.get('access_token');
+      this.venceEn = Date.now() + (Number(p.get('expires_in')) || 3600) * 1000;
+      guardarLS(CLAVE_CONECTADO, '1');
     }
 
-    async conectar() { return this.obtenerToken(true); }
+    /** Dirección de esta app (debe estar registrada en Google Cloud como «URI de redireccionamiento autorizado»). */
+    get direccionRetorno() { return location.origin + location.pathname.replace(/index\.html$/, ''); }
+
+    /** Va a Google a pedir el permiso y vuelve a esta misma página. silencioso=true no muestra pantallas (falla si hace falta). */
+    iniciarRedireccion(silencioso) {
+      const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+      guardarSS(CLAVE_ESTADO_AUTH, nonce); guardarSS(CLAVE_MODO_AUTH, silencioso ? 'silencioso' : 'normal');
+      const q = new URLSearchParams({ client_id: this.cfg.CLIENT_ID, redirect_uri: this.direccionRetorno, response_type: 'token',
+        scope: SCOPE, state: nonce, include_granted_scopes: 'true' });
+      if (silencioso) q.set('prompt', 'none');
+      try { if (this.alRedirigir) this.alRedirigir(); } catch (e) { /* sin borrador */ }
+      location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + q.toString());
+      return new Promise(() => {});                                  // la página se va; no se resuelve
+    }
+
+    /** Devuelve el permiso vigente; si venció, va a Google a renovarlo (y la app restaura lo que se estaba escribiendo). */
+    async obtenerToken() {
+      if (this.token && Date.now() < this.venceEn - 60000) return this.token;
+      return this.iniciarRedireccion(false);
+    }
+
+    async conectar() { return this.obtenerToken(); }
 
     desconectar() {
       const t = this.token;
       this.token = null; this.venceEn = 0; this.archivo = null;
       borrarLS(CLAVE_ARCHIVO); borrarLS(CLAVE_CONECTADO);
-      try { if (t && raiz.google) raiz.google.accounts.oauth2.revoke(t, () => {}); } catch (e) { /* nada */ }
+      try { if (t) fetch('https://oauth2.googleapis.com/revoke', { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'token=' + encodeURIComponent(t) }).catch(() => {}); } catch (e) { /* nada */ }
     }
 
     async _fetch(url, opciones, reintento) {
-      const token = await this.obtenerToken(false).catch(() => this.obtenerToken(true));
+      const token = await this.obtenerToken();
       let r;
       try {
         r = await fetch(url, Object.assign({}, opciones, { headers: Object.assign({}, (opciones || {}).headers, { Authorization: `Bearer ${token}` }) }));
@@ -124,7 +144,7 @@
 
     /** Muestra el selector de archivos de Google para elegir el Excel (da permiso solo a ese archivo). */
     async elegirArchivo() {
-      const token = await this.obtenerToken(true);
+      const token = await this.obtenerToken();
       await cargarScript('https://apis.google.com/js/api.js', () => !!(raiz.gapi && raiz.gapi.load));
       await new Promise((ok) => raiz.gapi.load('picker', { callback: ok }));
       return new Promise((ok) => {
