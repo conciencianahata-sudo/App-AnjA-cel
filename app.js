@@ -121,6 +121,25 @@
   }
 
   // ====================================================================
+  //  Borrador temporal (solo si Google obliga a salir de la página a renovar el permiso en pleno formulario)
+  // ====================================================================
+  const CLAVE_BORRADOR = 'anja_borrador';
+  function guardarBorrador() {
+    if (estado.vista !== 'formulario') return;
+    try { sessionStorage.setItem(CLAVE_BORRADOR, JSON.stringify({ d: recoger(), codigo: estado.codigo, modificado: estado.modificado })); } catch (e) { /* sin borrador */ }
+  }
+  function tomarBorrador() {
+    try {
+      const t = sessionStorage.getItem(CLAVE_BORRADOR); if (!t) return null;
+      sessionStorage.removeItem(CLAVE_BORRADOR);
+      const b = JSON.parse(t);
+      if (b.modificado) b.modificado = new Date(b.modificado);
+      return b;
+    } catch (e) { return null; }
+  }
+  const descartarBorrador = () => { try { sessionStorage.removeItem(CLAVE_BORRADOR); } catch (e) { /* nada */ } };
+
+  // ====================================================================
   //  Conexión con el Excel
   // ====================================================================
   function vistaConectar() {
@@ -147,7 +166,9 @@
         h('button', { class: 'btn primario lleno', type: 'button', id: 'btnElegir', texto: 'Elegir el Excel de mi Drive', onclick: cambiarArchivo }),
         h('p', { class: 'suave', texto: '¿Todavía no tienes el Excel en Drive?' }),
         h('button', { class: 'btn lleno', type: 'button', id: 'btnCrear', texto: 'Crear un Excel nuevo en mi Drive', onclick: crearExcelNuevo })));
+      return;
     }
+    abrirLista();     // ya conectado y con archivo recordado (p. ej. al reabrir la app): ir directo a la lista
   }
 
   async function cambiarArchivo() {
@@ -540,7 +561,7 @@
       if (almacen.tipo === 'drive') {
         items.push({ texto: 'Cambiar archivo', valor: cambiarArchivo });
         items.push({ texto: 'Cerrar sesión de Google', valor: async () => {
-          if (await preguntar('Cerrar sesión de Google', 'La app dejará de tener acceso a tu Excel en este teléfono. Podrás volver a conectarla cuando quieras.', { si: 'Cerrar sesión' })) { almacen.desconectar(); vistaConectar(); }
+          if (await preguntar('Cerrar sesión de Google', 'La app dejará de tener acceso a tu Excel en este teléfono. Podrás volver a conectarla cuando quieras.', { si: 'Cerrar sesión' })) { descartarBorrador(); almacen.desconectar(); vistaConectar(); }
         } });
       } else items.push({ texto: 'Abrir otro Excel', valor: vistaManual });
     }
@@ -568,9 +589,29 @@
     window.addEventListener('beforeunload', (e) => { if (hayCambios()) { e.preventDefault(); e.returnValue = ''; } });
     registrarSW();
     if (almacen.tipo === 'drive') {
-      if (!almacen.conectado && almacen.yaConectoAntes) { cargando('Conectando con Google…'); try { await almacen.obtenerToken(false); } catch (e) { /* se pedirá con el botón */ } }
+      almacen.alRedirigir = guardarBorrador;
+      const SILENCIO = 'anja_silencio_probado';
+      if (almacen.conectado) { try { sessionStorage.removeItem(SILENCIO); } catch (e) { /* nada */ } }
+      else if (almacen.errorRetorno) {
+        if (!almacen.retornoSilencioso) { vistaConectar(); aviso(almacen.errorRetorno === 'access_denied' ? 'No diste permiso a la app en Google.' : `Google no dio el permiso (${almacen.errorRetorno}).`, true); return; }
+      } else if (almacen.yaConectoAntes && almacen.listo) {
+        let yaProbado = null; try { yaProbado = sessionStorage.getItem(SILENCIO); } catch (e) { /* nada */ }
+        if (!yaProbado) {                                    // un solo intento sin pantallas por pestaña (evita bucles)
+          try { sessionStorage.setItem(SILENCIO, '1'); } catch (e) { /* nada */ }
+          cargando('Conectando con Google…');
+          almacen.iniciarRedireccion(true);
+          return;
+        }
+      }
       if (!almacen.conectado || !almacen.listo) return vistaConectar();
-      return abrirLista();
+      await abrirLista();
+      const b = tomarBorrador();
+      if (b && estado.vista === 'lista') {
+        vistaFormulario(b.d, { codigo: b.codigo, modificado: b.modificado });
+        estado.foto = ''; notificarCambio();
+        aviso('Google renovó el permiso. Lo que escribías sigue aquí: toca Guardar.');
+      }
+      return;
     }
     return vistaManual();
   }
